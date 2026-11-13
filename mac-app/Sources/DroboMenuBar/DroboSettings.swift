@@ -50,6 +50,7 @@ final class DroboViewModel: ObservableObject {
 
     init(settings: DroboSettings) {
         self.settings = settings
+        Notifier.requestAuthorization()
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refresh() }
         }
@@ -96,6 +97,7 @@ final class DroboViewModel: ObservableObject {
         }
 
         logState(stateSummary)
+        checkAlerts()
     }
 
     // MARK: - Valeurs affichées (flux d'abord, SSH en relais)
@@ -178,6 +180,47 @@ final class DroboViewModel: ObservableObject {
             }
         }
         return lines
+    }
+
+    private var lastAlertSignature: String?
+    private var consecutiveFailures = 0
+    private var announcedUnreachable = false
+
+    /// Envoie une notification quand la liste des constats change : apparition
+    /// d'un problème, changement, retour à la normale, ou Drobo injoignable
+    /// pendant deux minutes (4 lectures de suite).
+    private func checkAlerts() {
+        if isUnreachable {
+            consecutiveFailures += 1
+            if consecutiveFailures == 4, !announcedUnreachable {
+                announcedUnreachable = true
+                Notifier.send(title: "Drobo injoignable",
+                              body: "Aucune réponse depuis deux minutes, ni sur le port 5000 ni en SSH.")
+            }
+            return
+        }
+        consecutiveFailures = 0
+        if announcedUnreachable {
+            announcedUnreachable = false
+            Notifier.send(title: "Drobo de retour", body: "Le Drobo répond de nouveau.")
+        }
+
+        let signature = alertLines.joined(separator: "\n")
+        defer { lastAlertSignature = signature }
+        guard let previous = lastAlertSignature else {
+            // Première lecture : on ne signale que s'il y a déjà un problème.
+            if !signature.isEmpty {
+                Notifier.send(title: "Drobo : à surveiller", body: signature)
+            }
+            return
+        }
+        guard signature != previous else { return }
+        if signature.isEmpty {
+            Notifier.send(title: "Drobo : retour à la normale", body: "Tous les voyants sont au vert.")
+        } else {
+            Notifier.send(title: overallHealth == .critical ? "Drobo : critique" : "Drobo : à surveiller",
+                          body: signature)
+        }
     }
 
     // MARK: - Journal

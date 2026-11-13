@@ -77,6 +77,21 @@ struct SettingsView: View {
                     }
                 }
             }
+
+            Section("Alertes") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Button("Envoyer une notification d'essai") {
+                        Notifier.send(
+                            title: "Drobo : essai",
+                            body: "Les alertes fonctionnent. Tu en recevras une si un voyant change."
+                        )
+                    }
+                    Text("Une notification part quand un voyant change, qu'un disque compte des erreurs, que l'état général quitte « normal », ou que le Drobo ne répond plus pendant deux minutes.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
         .padding(20)
         .frame(width: 400)
