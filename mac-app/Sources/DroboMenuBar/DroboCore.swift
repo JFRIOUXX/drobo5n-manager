@@ -5,6 +5,20 @@ import Foundation
 
 enum Health {
     case good, warning, critical, unknown
+
+    /// Ordre de gravité, pour retenir le pire de plusieurs états.
+    var severity: Int {
+        switch self {
+        case .good: return 0
+        case .unknown: return 1
+        case .warning: return 2
+        case .critical: return 3
+        }
+    }
+
+    func worst(_ other: Health) -> Health {
+        other.severity > severity ? other : self
+    }
 }
 
 struct DnasStatusInfo {
@@ -75,7 +89,8 @@ func parseFirstInt64(_ text: String) -> Int64? {
     return Int64(token)
 }
 
-/// Taille lisible. decimal=true -> To (base 1000, comme les fabricants) ; false -> Tio (base 1024).
+/// Taille lisible, à la française (virgule décimale).
+/// decimal=true -> To (base 1000, comme les fabricants) ; false -> Tio (base 1024).
 func humanBytes(_ n: Int64?, decimal: Bool = true) -> String {
     guard let n else { return "—" }
     let step = decimal ? 1000.0 : 1024.0
@@ -83,11 +98,29 @@ func humanBytes(_ n: Int64?, decimal: Bool = true) -> String {
         ? ["o", "Ko", "Mo", "Go", "To", "Po"]
         : ["o", "Kio", "Mio", "Gio", "Tio", "Pio"]
     var val = Double(n)
-    for unit in units {
-        if val < step {
-            return String(format: "%.1f %@", val, unit)
-        }
-        val /= step
+    var unit = units[0]
+    for candidate in units {
+        unit = candidate
+        if val < step { break }
+        if candidate != units.last { val /= step }
     }
-    return String(format: "%.1f %@", val, units.last!)
+    return formatFrench(val, decimals: 1) + " " + unit
+}
+
+/// Taille d'un disque telle qu'on la lit sur l'étiquette : « 8 To », « 256 Go ».
+func diskSizeLabel(_ n: Int64) -> String {
+    guard n > 0 else { return "—" }
+    let gigabytes = Double(n) / 1e9
+    if gigabytes >= 1000 {
+        let terabytes = gigabytes / 1000
+        let rounded = terabytes.rounded()
+        // 8,0016 To -> « 8 To » ; 1,5 To reste « 1,5 To ».
+        return formatFrench(abs(terabytes - rounded) < 0.06 ? rounded : terabytes,
+                            decimals: abs(terabytes - rounded) < 0.06 ? 0 : 1) + " To"
+    }
+    return formatFrench(gigabytes.rounded(), decimals: 0) + " Go"
+}
+
+func formatFrench(_ value: Double, decimals: Int) -> String {
+    String(format: "%.\(decimals)f", locale: Locale(identifier: "fr_CA"), value)
 }

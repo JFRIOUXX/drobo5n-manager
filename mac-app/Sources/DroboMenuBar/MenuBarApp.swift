@@ -1,161 +1,40 @@
 // App SwiftUI barre de menu (MenuBarExtra, macOS 13+) pour le Drobo 5N2.
+// Le panneau lui-même est dans PanelViews.swift.
 
 import AppKit
 import SwiftUI
 
-func healthColor(_ health: Health) -> Color {
-    switch health {
-    case .good: return .green
-    case .warning: return .orange
-    case .critical: return .red
-    case .unknown: return .gray
-    }
-}
-
-func healthLine(_ status: DroboStatus) -> String {
-    let label: String
-    switch status.overallHealth {
-    case .good: label = "OK"
-    case .warning: label = "ATTENTION"
-    case .critical: label = "CRITIQUE"
-    case .unknown: label = "inconnu"
-    }
-    var text = label
-    if let detail = status.healthLabel { text += " — \(detail)" }
-    if let code = status.statusCode { text += " (code \(code))" }
-    return text
-}
-
-/// Pastille + % affichés dans la barre de menu elle-même.
+/// Icône de la barre de menus : une pastille de couleur et « DR ».
+///
+/// Une forme SwiftUI (Circle) n'est pas dessinée dans une barre de menus : seuls
+/// le texte et les images le sont. La pastille est donc une petite image, marquée
+/// non « template » pour garder sa couleur.
 struct DroboMenuBarLabel: View {
     @ObservedObject var viewModel: DroboViewModel
 
     var body: some View {
         HStack(spacing: 4) {
-            Circle()
-                .fill(healthColor(viewModel.status?.overallHealth ?? .unknown))
-                .frame(width: 8, height: 8)
+            Image(nsImage: Self.dot(for: viewModel.overallHealth))
             Text("DR")
         }
     }
-}
 
-struct CapacityBar: View {
-    var usedPct: Double
-    var color: Color
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 4).fill(Color.gray.opacity(0.25))
-                RoundedRectangle(cornerRadius: 4).fill(color)
-                    .frame(width: geo.size.width * CGFloat(min(max(usedPct, 0), 100)) / 100)
-            }
+    static func dot(for health: Health) -> NSImage {
+        let color: NSColor
+        switch health {
+        case .good: color = .systemGreen
+        case .warning: color = .systemYellow
+        case .critical: color = .systemRed
+        case .unknown: color = .systemGray
         }
-        .frame(height: 8)
-    }
-}
-
-struct LabeledRow: View {
-    var label: String
-    var value: String
-
-    var body: some View {
-        HStack {
-            Text(label).font(.caption).foregroundStyle(.secondary)
-            Spacer()
-            Text(value).font(.caption)
+        let size = NSSize(width: 9, height: 9)
+        let image = NSImage(size: size, flipped: false) { rect in
+            color.setFill()
+            NSBezierPath(ovalIn: rect.insetBy(dx: 0.5, dy: 0.5)).fill()
+            return true
         }
-    }
-}
-
-/// Panneau détaillé affiché au clic sur l'icône de la barre de menu.
-struct DroboMenuContent: View {
-    @ObservedObject var viewModel: DroboViewModel
-    @ObservedObject var settings: DroboSettings
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Drobo 5N2").font(.headline)
-                Spacer()
-                Text(viewModel.settings.host).font(.caption).foregroundStyle(.secondary)
-            }
-
-            if let status = viewModel.status {
-                HStack(spacing: 6) {
-                    Circle().fill(healthColor(status.overallHealth)).frame(width: 10, height: 10)
-                    Text(healthLine(status)).font(.subheadline)
-                }
-
-                Divider()
-
-                Text("Capacité physique réelle").font(.caption).foregroundStyle(.secondary)
-                CapacityBar(usedPct: status.physicalUsedPct ?? 0, color: healthColor(status.overallHealth))
-                HStack {
-                    Text("\(humanBytes(status.physicalUsedBytes)) / \(humanBytes(status.physicalTotalBytes))")
-                        .font(.caption)
-                    if let pct = status.physicalUsedPct {
-                        Text("(\(String(format: "%.1f", pct))%)").font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Text("libre \(humanBytes(status.physicalFreeBytes))").font(.caption).foregroundStyle(.secondary)
-                }
-
-                Divider()
-
-                Text("Volume présenté (thin-provisioning)").font(.caption).foregroundStyle(.secondary)
-                Text("\(humanBytes(status.volumeUsedBytes)) / \(humanBytes(status.volumeTotalBytes))")
-                    .font(.caption)
-
-                Divider()
-
-                LabeledRow(label: "Firmware", value: status.firmware ?? "—")
-                LabeledRow(label: "Disk pack", value: status.diskPackId ?? "—")
-
-                Text("Mis à jour à \(status.lastUpdated.formatted(date: .omitted, time: .standard))")
-                    .font(.caption2).foregroundStyle(.secondary)
-
-                if let error = viewModel.lastErrorMessage {
-                    Text("Dernière erreur : \(error)")
-                        .font(.caption2).foregroundStyle(.red)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
-                }
-            } else if let error = viewModel.lastErrorMessage {
-                // Message complet, sur plusieurs lignes, sélectionnable pour le copier.
-                Text("Erreur : \(error)")
-                    .font(.callout).foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
-            } else {
-                Text("Chargement…").foregroundStyle(.secondary)
-            }
-
-            Divider()
-
-            HStack {
-                Button(viewModel.isRefreshing ? "Rafraîchissement…" : "Rafraîchir") {
-                    Task { await viewModel.refresh() }
-                }
-                .disabled(viewModel.isRefreshing)
-
-                Spacer()
-
-                Button("Réglages…") {
-                    SettingsWindowController.shared.show(settings: settings, viewModel: viewModel)
-                }
-
-                Button("Quitter") {
-                    NSApplication.shared.terminate(nil)
-                }
-            }
-
-            Text("Température par disque : non incluse (phase 2).")
-                .font(.caption2).foregroundStyle(.secondary)
-        }
-        .padding(14)
-        .frame(width: 300)
+        image.isTemplate = false
+        return image
     }
 }
 
@@ -180,7 +59,11 @@ struct SettingsView: View {
                             isTesting = true
                             await viewModel.refresh()
                             isTesting = false
-                            testResult = viewModel.lastErrorMessage ?? "Connexion OK ✓"
+                            let errors = [
+                                viewModel.feedErrorMessage.map { "Port 5000 : \($0)" },
+                                viewModel.lastErrorMessage.map { "SSH : \($0)" },
+                            ].compactMap { $0 }
+                            testResult = errors.isEmpty ? "Connexion OK ✓" : errors.joined(separator: "\n")
                         }
                     }
                     .disabled(isTesting)
@@ -196,7 +79,7 @@ struct SettingsView: View {
             }
         }
         .padding(20)
-        .frame(width: 380)
+        .frame(width: 400)
     }
 }
 
@@ -236,10 +119,20 @@ struct DroboMenuBarApp: App {
 
     init() {
         let sharedSettings = DroboSettings()
+        let sharedViewModel = DroboViewModel(settings: sharedSettings)
         _settings = StateObject(wrappedValue: sharedSettings)
-        _viewModel = StateObject(wrappedValue: DroboViewModel(settings: sharedSettings))
+        _viewModel = StateObject(wrappedValue: sharedViewModel)
         // Pas d'icône dans le Dock : c'est une app de barre de menu uniquement.
         NSApplication.shared.setActivationPolicy(.accessory)
+
+        // Mode capture : écrit le panneau en PNG puis quitte (voir PanelSnapshot).
+        if let directory = ProcessInfo.processInfo.environment["DROBO_RENDER_PNG"], !directory.isEmpty {
+            Task { @MainActor in
+                await sharedViewModel.refresh()
+                PanelSnapshot.write(viewModel: sharedViewModel, settings: sharedSettings, to: directory)
+                exit(0)
+            }
+        }
     }
 
     var body: some Scene {
