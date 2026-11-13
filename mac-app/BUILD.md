@@ -38,7 +38,8 @@ n'est appliquée puisqu'il n'y a pas d'entitlements. C'est l'équivalent de
 
 ## Prérequis côté Drobo
 
-Les DroboApps **OpenSSH** et **sudo** installées, et le compte `admin` autorisé à
+Rien pour l'usage de base (port 5000). Pour la lecture SSH, facultative : les
+DroboApps **OpenSSH** et **sudo** installées, et le compte `admin` autorisé à
 utiliser sudo avec son mot de passe (`admin ALL=(ALL) ALL`, régénéré par le Drobo à
 chaque démarrage).
 
@@ -49,18 +50,15 @@ le mot de passe admin à sudo (`sudo -S`). Voir `PROGRESS.md`, MISE À JOUR 9.
 
 En cas d'erreur : `tail /tmp/drobo-menubar.log` (une ligne par changement d'état).
 
-## Premier lancement — saisir tes identifiants
+## Premier lancement — les Réglages
 
-1. Lance l'app (`swift run`, ou double-clique le binaire dans
-   `.build/debug/DroboMenuBar` une fois construit).
-2. Clique sur la pastille dans la barre de menu → **Réglages…** (ou ⌘, si la
-   fenêtre a le focus).
-3. Renseigne :
-   - **Adresse** : `Drobo5NV2.local` (ou l'IP si le mDNS ne résout pas)
-   - **Utilisateur** : `admin`
-   - **Mot de passe** : ton mot de passe admin actuel
-4. Clique **Tester la connexion**. Le mot de passe est stocké dans le
+1. Clique sur « DR » dans la barre de menus, puis sur **Réglages…**.
+2. **Adresse** : le nom Bonjour du Drobo (par exemple `MonDrobo.local`) ou son IP.
+   Cela suffit pour l'état des baies, la capacité et les alertes (port 5000).
+3. **SSH (facultatif)** : utilisateur `admin` et son mot de passe, pour la
+   contre-vérification et le volume présenté. Le mot de passe est stocké dans le
    **Trousseau macOS** (jamais en clair sur disque) dès que tu le tapes.
+4. Clique **Tester la connexion**.
 
 ### À propos d'une éventuelle demande du Trousseau
 
@@ -68,6 +66,17 @@ Comme le binaire est reconstruit (donc re-signé ad-hoc) à chaque `swift build`
 macOS peut occasionnellement demander une autorisation d'accès au Trousseau
 (« DroboMenuBar veut accéder à... ») après une recompilation. C'est normal pour
 un binaire non signé par un compte développeur — clique **Toujours autoriser**.
+
+## Le plus simple : `install.sh`
+
+```bash
+./install.sh
+```
+
+Le script fait tout ce qui est décrit plus bas : compilation, bundle, signature
+ad hoc, installation dans `~/Applications`, LaunchAgent, démarrage (avec la
+reprise nécessaire au premier lancement). `./install.sh uninstall` retire l'app.
+Le reste de ce fichier explique chaque étape, pour qui veut la faire à la main.
 
 ## Un vrai bundle `.app`
 
@@ -120,20 +129,20 @@ qui pointe vers le binaire à l'intérieur du bundle installé :
 le bundle (étapes ci-dessus), puis relancer l'agent :
 
 ```bash
-launchctl kickstart -k gui/501/com.jf.drobo5n-manager   # -k = redémarre le process existant
+launchctl kickstart -k gui/$(id -u)/com.jf.drobo5n-manager   # -k = redémarre le process existant
 ```
 
 Logs de l'instance lancée par launchd : `/tmp/drobo-menubar.log`.
 
 **Premier lancement après un remplacement du bundle** : macOS refuse une fois le
 démarrage par launchd (`last exit reason = OS_REASON_CODESIGNING`, visible avec
-`launchctl print gui/501/com.jf.drobo5n-manager`). Relancer la même commande
+`launchctl print gui/$(id -u)/com.jf.drobo5n-manager`). Relancer la même commande
 `kickstart` : le deuxième essai passe (constaté deux fois le 12 nov. 2026).
 
 Pour désactiver le lancement automatique :
 
 ```bash
-launchctl bootout gui/501/com.jf.drobo5n-manager
+launchctl bootout gui/$(id -u)/com.jf.drobo5n-manager
 rm ~/Library/LaunchAgents/com.jf.drobo5n-manager.plist
 ```
 
