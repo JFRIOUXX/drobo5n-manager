@@ -20,7 +20,8 @@ final class DroboSettings: ObservableObject {
 
     init() {
         let defaults = UserDefaults.standard
-        host = defaults.string(forKey: "drobo.host") ?? "Drobo5NV2.local"
+        // Pas d'adresse par défaut : le nom Bonjour d'un Drobo est choisi par son propriétaire.
+        host = defaults.string(forKey: "drobo.host") ?? ""
         username = defaults.string(forKey: "drobo.username") ?? "admin"
         // DROBO_NO_KEYCHAIN=1 : ne touche pas au Trousseau (essais de rendu avec un
         // binaire fraîchement compilé, pour éviter la demande d'accès de macOS).
@@ -33,6 +34,7 @@ final class DroboSettings: ObservableObject {
 ///   - le flux du port 5000 (`DroboFeed`) : sans mot de passe, donne l'état
 ///     général, la capacité et le détail de chaque baie ;
 ///   - SSH + `esa` (`DroboStatus`) : contre-vérification, et capacité du volume.
+///     Facultative : sans mot de passe dans les Réglages, elle est sautée.
 /// Le flux passe en premier ; SSH prend le relais s'il manque.
 @MainActor
 final class DroboViewModel: ObservableObject {
@@ -58,15 +60,27 @@ final class DroboViewModel: ObservableObject {
     }
 
     func refresh() async {
-        isRefreshing = true
-        defer { isRefreshing = false }
-
-        let host = settings.host
+        let host = settings.host.trimmingCharacters(in: .whitespaces)
         let username = settings.username
         let password = settings.password
         let client = self.client
 
-        async let sshResult: Result<DroboStatus, Error> = {
+        guard !host.isEmpty else {
+            // Rien à lire tant que l'adresse n'est pas renseignée.
+            feed = nil
+            status = nil
+            feedErrorMessage = nil
+            lastErrorMessage = nil
+            return
+        }
+
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        // Sans mot de passe, on se contente du port 5000 : SSH est sauté, sans erreur.
+        let useSSH = !password.isEmpty
+        async let sshResult: Result<DroboStatus, Error>? = {
+            guard useSSH else { return nil }
             do {
                 return .success(try await client.fetchStatus(host: host, username: username, password: password))
             } catch {
@@ -89,11 +103,14 @@ final class DroboViewModel: ObservableObject {
             feedErrorMessage = describeError(error)
         }
         switch await sshResult {
-        case .success(let value):
+        case .success(let value)?:
             status = value
             lastErrorMessage = nil
-        case .failure(let error):
+        case .failure(let error)?:
             lastErrorMessage = describeError(error)
+        case nil:
+            status = nil
+            lastErrorMessage = nil
         }
 
         logState(stateSummary)
@@ -105,8 +122,12 @@ final class DroboViewModel: ObservableObject {
     /// Vrai si au moins une des deux sources a déjà répondu.
     var hasData: Bool { feed != nil || status != nil }
 
-    /// Vrai si les deux sources viennent d'échouer.
-    var isUnreachable: Bool { feedErrorMessage != nil && lastErrorMessage != nil }
+    /// Vrai tant que l'adresse du Drobo n'est pas renseignée dans les Réglages.
+    var needsSetup: Bool { settings.host.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    /// Vrai si le port 5000 vient d'échouer et que SSH n'a rien pour le remplacer
+    /// (en erreur lui aussi, ou sauté faute de mot de passe).
+    var isUnreachable: Bool { feedErrorMessage != nil && (lastErrorMessage != nil || status == nil) }
 
     var dnasCode: Int? {
         if feedErrorMessage == nil, let code = feed?.dnasStatus { return code }
@@ -117,7 +138,7 @@ final class DroboViewModel: ObservableObject {
     /// État général : le code du Drobo, aggravé par le pire voyant et par tout
     /// compteur d'erreurs non nul.
     var overallHealth: Health {
-        if isUnreachable { return .unknown }
+        if needsSetup || isUnreachable { return .unknown }
         var health = dnasCode.flatMap { dnasStatusTable[$0]?.health } ?? .unknown
         for bay in feed?.slots ?? [] {
             health = health.worst(bay.led.health)
@@ -127,6 +148,7 @@ final class DroboViewModel: ObservableObject {
     }
 
     var healthTitle: String {
+        if needsSetup { return "À configurer" }
         if isUnreachable { return "Injoignable" }
         switch overallHealth {
         case .good: return "Tout va bien"
@@ -138,12 +160,12 @@ final class DroboViewModel: ObservableObject {
 
     /// Phrase qui dit pourquoi l'état n'est pas « tout va bien » (nil sinon).
     var healthDetail: String? {
-        if isUnreachable { return "Le Drobo ne répond ni sur le port 5000 ni en SSH." }
+        if isUnreachable { return "Le Drobo ne répond pas." }
         let lines = alertLines
         return lines.isEmpty ? nil : lines.joined(separator: " · ")
     }
 
-    var displayName: String { feed?.name ?? "Drobo 5N2" }
+    var displayName: String { feed?.name ?? "Drobo" }
     var modelName: String? { feed?.model }
     var firmware: String? { feed?.firmware ?? status?.firmware }
 
@@ -195,7 +217,7 @@ final class DroboViewModel: ObservableObject {
             if consecutiveFailures == 4, !announcedUnreachable {
                 announcedUnreachable = true
                 Notifier.send(title: "Drobo injoignable",
-                              body: "Aucune réponse depuis deux minutes, ni sur le port 5000 ni en SSH.")
+                              body: "Aucune réponse depuis deux minutes.")
             }
             return
         }

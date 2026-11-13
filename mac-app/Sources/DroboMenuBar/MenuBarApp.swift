@@ -46,10 +46,17 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Connexion Drobo 5N2") {
+            Section("Drobo") {
                 TextField("Adresse (IP ou nom .local)", text: $settings.host)
-                TextField("Utilisateur SSH", text: $settings.username)
+            }
+
+            Section("SSH (facultatif)") {
+                TextField("Utilisateur", text: $settings.username)
                 SecureField("Mot de passe", text: $settings.password)
+                Text("L'état des baies et la capacité viennent du port 5000, sans mot de passe. Avec le compte admin du Drobo (DroboApps OpenSSH et sudo installées), l'app contre-vérifie l'état par SSH et affiche le volume présenté. Le mot de passe va dans le Trousseau.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Section {
@@ -116,7 +123,7 @@ final class SettingsWindowController {
                 rootView: SettingsView(settings: settings, viewModel: viewModel)
             )
             let newWindow = NSWindow(contentViewController: hosting)
-            newWindow.title = "Réglages Drobo 5N2"
+            newWindow.title = "Réglages DroboMenuBar"
             newWindow.styleMask = [.titled, .closable, .miniaturizable]
             newWindow.isReleasedWhenClosed = false
             newWindow.center()

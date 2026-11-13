@@ -306,7 +306,12 @@ struct DroboMenuContent: View {
                     )
             }
 
-            if viewModel.hasData {
+            if viewModel.needsSetup {
+                Text("Indique l'adresse de ton Drobo dans les Réglages (son nom Bonjour, par exemple « MonDrobo.local », ou son adresse IP).")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if viewModel.hasData {
                 capacity
                 if let feed = viewModel.feed {
                     Faceplate(feed: feed)
