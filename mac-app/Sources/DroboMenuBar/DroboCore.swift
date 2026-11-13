@@ -50,6 +50,9 @@ struct DroboStatus {
 
     var lastUpdated: Date = Date()
 
+    /// Chemin sudo utilisé pour lire `esa` (règle NOPASSWD ou mot de passe).
+    var sudoPath: SudoPath?
+
     var physicalFreeBytes: Int64? {
         guard let total = physicalTotalBytes, let used = physicalUsedBytes else { return nil }
         return total - used

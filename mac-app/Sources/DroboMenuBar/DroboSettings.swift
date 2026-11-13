@@ -55,8 +55,24 @@ final class DroboViewModel: ObservableObject {
             )
             status = result
             lastErrorMessage = nil
+            let code = result.statusCode.map(String.init) ?? "?"
+            logState("OK — état \(code), sudo par \(result.sudoPath?.rawValue ?? "?")")
         } catch {
-            lastErrorMessage = error.localizedDescription
+            let message = describeError(error)
+            lastErrorMessage = message
+            logState("ERREUR — \(message)")
         }
+    }
+
+    /// Journal minimal sur la sortie d'erreur (→ /tmp/drobo-menubar.log quand
+    /// l'app est lancée par launchd). Une ligne seulement quand l'état change,
+    /// pour pouvoir diagnostiquer une panne sans ouvrir le panneau.
+    private var lastLoggedState: String?
+
+    private func logState(_ state: String) {
+        guard state != lastLoggedState else { return }
+        lastLoggedState = state
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        FileHandle.standardError.write(Data("\(stamp) \(state)\n".utf8))
     }
 }

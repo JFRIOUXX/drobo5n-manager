@@ -119,10 +119,15 @@ struct DroboMenuContent: View {
                 if let error = viewModel.lastErrorMessage {
                     Text("Dernière erreur : \(error)")
                         .font(.caption2).foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
                 }
             } else if let error = viewModel.lastErrorMessage {
+                // Message complet, sur plusieurs lignes, sélectionnable pour le copier.
                 Text("Erreur : \(error)")
                     .font(.callout).foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
             } else {
                 Text("Chargement…").foregroundStyle(.secondary)
             }
@@ -169,7 +174,7 @@ struct SettingsView: View {
             }
 
             Section {
-                HStack {
+                VStack(alignment: .leading, spacing: 6) {
                     Button(isTesting ? "Test en cours…" : "Tester la connexion") {
                         Task {
                             isTesting = true
@@ -184,6 +189,8 @@ struct SettingsView: View {
                         Text(testResult)
                             .font(.caption)
                             .foregroundStyle(testResult.hasPrefix("Connexion OK") ? .green : .red)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
                     }
                 }
             }

@@ -38,14 +38,16 @@ n'est appliquée puisqu'il n'y a pas d'entitlements. C'est l'équivalent de
 
 ## Prérequis côté Drobo
 
-Fait une fois (voir `PROGRESS.md`, MISE À JOUR 7) : règle `sudo` NOPASSWD ciblée
-sur `/usr/bin/esa` pour l'utilisateur `admin`. Sans elle, chaque appel `esa`
-échouera silencieusement (l'app remontera une erreur de connexion).
+Les DroboApps **OpenSSH** et **sudo** installées, et le compte `admin` autorisé à
+utiliser sudo avec son mot de passe (`admin ALL=(ALL) ALL`, régénéré par le Drobo à
+chaque démarrage).
 
-⚠️ Cette règle vit dans `/tmp/sudo/sudoers.d/admin`, probablement un tmpfs — un
-reboot du Drobo peut la faire disparaître. Si l'app se met soudain à afficher
-une erreur après un reboot du Drobo, c'est la première chose à vérifier
-(re-poser la règle via SSH).
+La règle `NOPASSWD` ciblée sur `/usr/bin/esa` (`PROGRESS.md`, MISE À JOUR 7) n'est
+**plus nécessaire** depuis le 12 nov. 2026 : si elle est là, l'app s'en sert
+(`sudo -n`) ; si elle a sauté après un redémarrage du Drobo, l'app donne elle-même
+le mot de passe admin à sudo (`sudo -S`). Voir `PROGRESS.md`, MISE À JOUR 9.
+
+En cas d'erreur : `tail /tmp/drobo-menubar.log` (une ligne par changement d'état).
 
 ## Premier lancement — saisir tes identifiants
 

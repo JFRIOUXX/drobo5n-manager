@@ -1,7 +1,7 @@
 # Projet Drobo 5N2 — Journal de progression
 
 > Récap de tout ce qu'on a découvert, pour reprendre sans repartir de zéro si la
-> conversation est perdue. Dernière mise à jour : 24 août 2026.
+> conversation est perdue. Dernière mise à jour : 12 novembre 2026 (voir MISE À JOUR 9).
 
 ## Objectif
 
@@ -414,3 +414,46 @@ main (pas besoin d'Xcode pour ça) :
   Ouverture (Login Items) si préféré au LaunchAgent.
 - Procédure de reconstruction (code modifié → nouveau binaire → régénérer le
   bundle → relancer l'agent) documentée dans `mac-app/BUILD.md`.
+
+---
+
+## MISE À JOUR 9 — panne du 12 nov. 2026 : l'app ne dépend plus de la règle NOPASSWD
+
+**Symptôme** : panneau « Erreur : The operation couldn't be completed… » (texte
+tronqué). **Cause** : le Drobo a redémarré le 3 oct. 2026 ; `/tmp/sudo/sudoers.d/admin`
+a été régénéré avec la seule ligne `admin ALL=(ALL) ALL`, donc `sudo -n /usr/bin/esa`
+répondait « a password is required » (code 1), ce que Citadel remonte en
+`SSHClient.CommandFailed`. La réserve de la MISE À JOUR 7 s'est réalisée. Ce n'était
+ni macOS 27.2 ni la permission Réseau local (pistes écartées ce soir-là).
+
+**Réparation immédiate** : ligne `admin ALL=(root) NOPASSWD: /usr/bin/esa` reposée à
+la main (copie de l'ancien fichier dans `/tmp/admin.sudoers.bak` sur le Drobo). Elle
+sautera encore au prochain redémarrage du Drobo, sans conséquence désormais.
+
+**Changement dans l'app** (`DroboClient.swift`) : toutes les sous-commandes `esa`
+partent en une seule commande SSH, par deux chemins essayés dans l'ordre :
+1. `sudo -n` (règle NOPASSWD présente) : aucun mot de passe envoyé à sudo ;
+2. sinon `sudo -S -p ''` : l'app donne le mot de passe admin (celui du Trousseau) à
+   sudo sur son entrée standard, par here-document à délimiteur cité.
+Vérifié le 12 nov. : chemin 1 au lancement normal, chemin 2 avec le crochet de test
+`DROBO_SUDO_MODE=password` (variable d'environnement). Le chemin 2 n'a pas été testé
+en retirant réellement la règle sur le Drobo.
+
+**Diagnostic plus rapide la prochaine fois** :
+- l'app écrit une ligne dans `/tmp/drobo-menubar.log` à chaque changement d'état
+  (`OK — état 6, sudo par …` ou `ERREUR — …`) : `tail /tmp/drobo-menubar.log` ;
+- le panneau et les Réglages affichent maintenant l'erreur en entier (`describeError`).
+
+**Piège macOS vu à l'installation** : la première relance par launchd juste après le
+remplacement du bundle a été refusée une fois (`OS_REASON_CODESIGNING`, Launch
+Constraint Violation) ; les relances suivantes sont passées. Si l'app ne démarre pas
+après une réinstallation : relancer `launchctl kickstart -k gui/501/com.jf.drobo5n-manager`.
+
+**Découverte : flux d'état sur le port 5000, sans mot de passe.** `nc Drobo5NV2.local 5000`
+renvoie un en-tête `DRINASD` puis le XML `<ESATMUpdate>` complet (celui du Dashboard) :
+nom, firmware, `mStatus`, capacités, et par baie (`mSlotsExp`, 6 entrées dont le slot
+mSATA) `mStatus`, `mErrorCount`, `mDiskState`, `mMake`, `mDiskFwRev`, `mSerial`,
+`mPhysicalCapacity`, `SSDLifeRemaining`, `RotationalSpeed`. **`mTemperature` vaut 0 pour
+toutes les baies** : pas de °C par cette voie non plus. C'est en revanche la source
+la plus simple pour un état par disque (erreurs, modèle, série) sans SSH ni sudo.
+
