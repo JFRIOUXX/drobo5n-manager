@@ -1,138 +1,153 @@
 # drobo5n-manager
 
-Outil de gestion / monitoring d'un **Drobo 5N** via SSH — un remplacement du
-Drobo Dashboard, qui ne fonctionne plus proprement sur les Mac récents.
+*[Version française](README.fr.md)*
 
-Le Drobo 5N tourne sur du **Linux embarqué**. Plutôt que de reverse-engineerer
-le protocole binaire propriétaire du Dashboard, cet outil ouvre une session SSH
-sur l'appareil et lit son état directement. **100 % compatible macOS 27** :
-c'est du Python pur, aucune extension noyau, aucune notarisation, rien qui
-dépende de la version de macOS.
-
-> ✅ **État actuel : MVP fonctionnel.** Affiche la santé globale, la capacité
-> physique réelle, l'espace du volume, la version du firmware et l'ID du disk
-> pack — le tout via SSH + `sudo esa …`. La température **par disque** n'est pas
-> incluse (voir `PROGRESS.md`, phase 2 : elle nécessite une lecture SCSI ESA sur
-> `/dev/sg0`). La santé globale `dnasStatus` sert de filet anti-surchauffe : une
-> surchauffe critique la ferait passer à un code d'erreur.
-
----
-
-## L'app de barre de menus (macOS)
+A replacement for the Drobo Dashboard, for people who still run a **Drobo 5N2**
+(or 5N) NAS. Drobo is no longer in business and its Dashboard does not work on
+recent versions of macOS. This project reads the device directly.
 
 <p>
-  <img src="docs/panneau-sombre.png" alt="Panneau de DroboMenuBar, thème sombre" width="320">
-  <img src="docs/panneau-clair.png" alt="Panneau de DroboMenuBar, thème clair" width="320">
+  <img src="docs/panneau-sombre.png" alt="DroboMenuBar panel, dark theme" width="320">
+  <img src="docs/panneau-clair.png" alt="DroboMenuBar panel, light theme" width="320">
 </p>
 
-`mac-app/` contient **DroboMenuBar**, une petite app SwiftUI qui vit dans la barre
-de menus : une pastille de couleur et « DR ». Au clic, le panneau reprend l'allure
-du Drobo lui-même :
+It contains two tools:
 
-- la **capacité** sur dix voyants bleus, comme au bas de l'appareil (un voyant = 10 %) ;
-- la **façade** : une rangée par baie, avec le disque, sa taille et son voyant ;
-- l'**accélérateur** mSATA ;
-- une **notification** quand un voyant change, qu'un disque compte des erreurs ou que
-  le Drobo ne répond plus.
+- **DroboMenuBar** (`mac-app/`): a small macOS menu bar app. This is the main one.
+- **drobo5n** (`drobo5n/`): a Python command-line tool and local web page that
+  read the same information over SSH.
 
-L'état par baie vient du **port 5000** du Drobo, qui diffuse sans mot de passe le
-même XML que lisait le Drobo Dashboard. La lecture SSH (`sudo esa …`) sert de
-contre-vérification. Le Drobo ne publie aucune température (le champ existe, il vaut 0).
+Tested on one device only: a Drobo 5N2, firmware 4.3.1, from macOS 27. Other
+network Drobos may work; reports are welcome.
 
-Compilation et installation : voir [`mac-app/BUILD.md`](mac-app/BUILD.md).
+> The app's interface, the code comments and the engineering notes are in French.
 
----
+## What the app shows
 
-## Prérequis
+- A colored dot and "DR" in the menu bar: green, yellow, red, or gray when the
+  Drobo cannot be reached.
+- **Capacity** on ten lights, like the row at the bottom of the device (one
+  light per 10 %).
+- **The faceplate**: one row per bay, with the disk, its size and its light.
+- The mSATA **accelerator** bay.
+- A **notification** when a light changes, when a disk reports errors, when the
+  overall status leaves "normal", or when the Drobo stops answering for two minutes.
 
-1. **Python 3.11+** sur ton Mac (nécessaire pour `tomllib`).
-   Le plus simple : `brew install python@3.12` — ou `uv` si tu l'utilises déjà.
-2. **Accès SSH activé sur le Drobo 5N.** Ce n'est pas actif d'origine :
-   - Installe l'app **OpenSSH** depuis DroboApps / DroboPorts, **ou**
-   - Active l'accès root documenté par la communauté (voir *Sources* plus bas).
-   - Vérifie ensuite : `ssh root@<ip-du-drobo>` doit t'ouvrir un shell.
+It does **not** show temperatures: the 5N2 does not publish them (see
+[How it works](#how-it-works)).
 
-## Installation
+## Install the app
+
+Requirements: macOS 13 or later, and the Xcode Command Line Tools
+(`xcode-select --install`). No Apple developer account is needed.
 
 ```bash
-cd drobo5n-manager
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+git clone https://github.com/JFRIOUXX/drobo5n-manager.git
+```
+
+```bash
+cd drobo5n-manager/mac-app && ./install.sh
+```
+
+The script builds the app, installs it in `~/Applications`, and registers a
+LaunchAgent so it starts at login. Then:
+
+1. Click **DR** in the menu bar, then **Réglages…** (Settings).
+2. Enter the address of your Drobo: its Bonjour name (for example
+   `MyDrobo.local`) or its IP address.
+3. macOS may ask for permission to reach devices on your local network, and
+   to send notifications. Allow both.
+
+That is all you need for the bays, the capacity and the alerts. Nothing has to
+be installed on the Drobo.
+
+To remove it: `./install.sh uninstall`.
+
+### Optional: the SSH cross-check
+
+If you also enter the Drobo's `admin` account and password, the app
+double-checks the overall status over SSH and shows the size of the presented
+volume. This needs the **OpenSSH** and **sudo** DroboApps on the Drobo. The
+password is stored in the macOS Keychain.
+
+More details, including how the app is bundled and signed:
+[`mac-app/BUILD.md`](mac-app/BUILD.md) (in French).
+
+## How it works
+
+A network Drobo broadcasts its full state on **TCP port 5000**, without
+authentication. It is the XML document the Drobo Dashboard used to read. You
+can look at it yourself:
+
+```bash
+nc MyDrobo.local 5000
+```
+
+Each message is a 16-byte header (`DRINASD\0`, then the length of the XML) and
+an `<ESATMUpdate>` document with the name, model, firmware, capacities, overall
+status and, for each bay, the light, the error count, the disk model, its
+serial number and its size.
+
+Two things to know:
+
+- **Temperatures are not there.** Every bay has an `<mTemperature>` field, but
+  on the 5N2 it is always 0.
+- **Light codes.** A bay status of 3 (green) and 128 (empty bay) were observed
+  on a real device. 0, 1 and 2 (off, red, yellow) follow the table of the
+  drobo-utils project and were not observed here. Any other code is displayed
+  as "état N" in yellow.
+
+Over SSH, the internal `esa` tool gives the same overall status code
+(`sudo esa dnasStatus`: 5 or 6 means normal) and the capacities.
+
+The full reverse-engineering journal, dead ends included, is in
+[`PROGRESS.md`](PROGRESS.md) (in French).
+
+## The Python tool
+
+Requirements: Python 3.11 or later, and SSH enabled on the Drobo (OpenSSH and
+sudo DroboApps).
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+```
+
+```bash
 cp config.example.toml config.toml
-# édite config.toml : mets l'IP de ton 5N
 ```
 
-## Utilisation
-
-```bash
-# 1. Vérifie que la connexion SSH passe
-python -m drobo5n ping
-
-# 2. Affiche l'état complet (santé, capacité physique réelle, firmware, disk pack)
-python -m drobo5n status
-python -m drobo5n status --json
-
-# 3. Mini dashboard web local (auto-refresh, ouvre-le dans le navigateur)
-python -m drobo5n serve      # http://127.0.0.1:8765
-
-# (optionnel) Reconnaissance : re-dumpe l'état brut de l'appareil dans un rapport
-python -m drobo5n recon
-```
-
-> Le mot de passe du compte `admin` sert à la fois pour SSH et pour `sudo esa …`.
-> Mets-le dans `config.toml` ou, mieux, via `export DROBO5N_PASSWORD="…"`.
-
-Le mot de passe peut être passé sans l'écrire dans le fichier :
+Edit `config.toml` with the address of your Drobo, then give the `admin`
+password through the environment rather than the file:
 
 ```bash
 export DROBO5N_PASSWORD="..."
-python -m drobo5n status
 ```
 
----
+| Command | What it does |
+|---|---|
+| `python -m drobo5n ping` | checks that the SSH connection works |
+| `python -m drobo5n status` | overall status, real capacity, firmware (`--json` for JSON) |
+| `python -m drobo5n serve` | small local web page at http://127.0.0.1:8765 |
+| `python -m drobo5n recon` | dumps the raw state of the device to a Markdown report |
 
-## La prochaine étape : la recon
+Everything is read-only. `config.toml` and the `recon-*.md` reports are
+git-ignored, because they can contain addresses and secrets.
 
-Le firmware du 5N n'est pas documenté publiquement, donc on ne sait pas encore
-quelle commande donne la santé/température des disques. `recon` lance une
-batterie de commandes **en lecture seule** (identité, montages, `/proc`,
-processus, chasse aux binaires `*drobo*`, ports en écoute…) et dump tout dans un
-rapport Markdown.
+## Safety
 
-Une fois le rapport en main : repère les sources de statut, puis remplis les
-parseurs `parse_bays()` / `parse_health()` dans `drobo5n/collect.py`. Le fichier
-`CLAUDE.md` donne le plan détaillé pour faire ça avec ton Claude Code natif.
+- Both tools only read. They never change a setting on the Drobo.
+- Some `esa` subcommands are destructive (`vxreboot`, `vxshutdown`, `update`,
+  `vxcmd`). Neither tool calls them; do not run them out of curiosity.
+- Port 5000 is unauthenticated by design of the device. Keep the Drobo on a
+  network you trust, and do not expose it to the internet.
 
-## Structure
+## Credits and references
 
-```
-drobo5n-manager/
-├── README.md            ← tu es ici
-├── CLAUDE.md            ← plan de reprise pour Claude Code natif
-├── requirements.txt
-├── config.example.toml
-└── drobo5n/
-    ├── config.py        # chargement config TOML / env
-    ├── ssh.py           # session SSH (paramiko), commandes lecture seule
-    ├── recon.py         # sweep de découverte -> rapport
-    ├── model.py         # DroboStatus, DiskBay, Health
-    ├── collect.py       # collecte + parsing  ← À COMPLÉTER après recon
-    ├── format.py        # affichage texte
-    ├── web.py           # mini dashboard Flask
-    └── cli.py           # entrypoint (ping / recon / status / serve)
-```
+- [drobo-utils](https://github.com/petersilva/drobo-utils) and its
+  [Python 3 fork](https://github.com/n3gwg/drobo-utils), for the light codes.
+- [DroboPorts](https://www.droboports.com/), for the OpenSSH and sudo DroboApps.
+- [Citadel](https://github.com/orlandos-nl/Citadel), the Swift SSH library the app uses.
 
-## Sécurité
+## License
 
-- `config.toml` et les rapports `recon-*.md` sont git-ignorés (ils peuvent
-  contenir IP internes / secrets).
-- Toutes les commandes de la phase actuelle sont en **lecture seule**. Les
-  actions d'écriture (config, mise à jour) seront ajoutées explicitement et avec
-  confirmation, une fois le protocole de lecture solide.
-
-## Sources / références
-
-- drobo-utils (fork Python 3) : https://github.com/n3gwg/drobo-utils
-- drobo-utils original : https://github.com/petersilva/drobo-utils
-- OpenSSH pour Drobo (DroboPorts) : https://www.droboports.com/app-repository/openssh/
-- Accès SSH au 5N : http://blog.chisel.pm/2014/03/how-to-ssh-onto-drobo-5n-from-microsoft.html
+[MIT](LICENSE).

@@ -6,14 +6,14 @@
 ## Objectif
 
 Remplacer le Drobo Dashboard (cassé sur Mac récents / macOS 27) par un outil
-maison pour gérer/surveiller le **Drobo 5N2**. Approche retenue : SSH vers
+maison pour gérer/surveiller un **Drobo 5N2**. Approche retenue : SSH vers
 l'appareil (Linux embarqué), lecture de l'état, puis affichage. Squelette Python
 déjà livré (projet `drobo5n-manager`, voir README.md et CLAUDE.md).
 
 ## L'appareil
 
 - Modèle : **Drobo 5N2** (network/NAS). Nom Bonjour sur le réseau : **`Drobo5NV2`**.
-- Ancien iMac : fait encore tourner le Drobo Dashboard officiel (utile pour créer
+- Un ancien Mac fait encore tourner le Drobo Dashboard officiel (utile pour créer
   des comptes, redémarrer proprement, etc.).
 
 ## ✅ Accès SSH — CE QUI MARCHE (acquis)
@@ -21,7 +21,7 @@ déjà livré (projet `drobo5n-manager`, voir README.md et CLAUDE.md).
 1. SSH activé en installant l'app **OpenSSH** de DroboPorts : on dépose le fichier
    `openssh.tgz` dans le partage réseau **`DroboApps`** (Finder → Cmd+K →
    `smb://Drobo5NV2.local`), puis **redémarrage** du Drobo (fait via le Dashboard
-   sur l'iMac). Au reboot, OpenSSH s'installe et démarre sur le port 22.
+   sur l'ancien Mac). Au reboot, OpenSSH s'installe et démarre sur le port 22.
 2. Découverte de l'appareil : `dns-sd -B _ssh._tcp` → nom `Drobo5NV2`.
 3. Connexion : **`ssh admin@Drobo5NV2.local`**
    - Compte : **`admin`** en **minuscules** (le `Admin` majuscule ne marche pas —
@@ -122,7 +122,7 @@ socket réservé à root.
 1. Télécharger `sudo` (v1.8.11p2 pour Drobo5N) depuis
    https://www.droboports.com/app-repository/sudo/
 2. Déposer le `.tgz` dans le partage **DroboApps** (comme OpenSSH).
-3. **Redémarrer** le Drobo (via le Dashboard sur l'iMac).
+3. **Redémarrer** le Drobo (via le Dashboard sur l'ancien Mac).
 4. Par défaut, l'app autorise `sudo` **sans mot de passe** pour tous les comptes.
 5. Ensuite : `sudo esa dnasStatus` → devrait renvoyer 5 ou 6 (normal).
 6. Puis lister les sous-commandes : `sudo esa` (ou `sudo esa help`) pour trouver
@@ -186,7 +186,7 @@ Sortie réelle des commandes (chaque commande = une valeur, facile à parser) :
 sudo esa vxver          → 4.3.1 8.126.117497        (version  build)
 sudo esa vxphyscapacity → 27798829793280            (octets → ~27,8 To physiques)
 sudo esa vxusedcapacity → 8641437265920             (octets → ~8,64 To utilisés)
-sudo esa vxdiskpackid   → 0123456789ABCDEF          (hex)
+sudo esa vxdiskpackid   → 0123456789ABCDEF          (hex, 16 chiffres)
 sudo esa dnasStatus     → 6                          (5/6 = normal)
 ```
 
@@ -242,7 +242,7 @@ par disque comme un **sous-projet phase 2** (voie B = la plus fiable).
 
 ## MISE À JOUR 5 — reconnaissance pour la voie B (SCSI direct)
 
-Voie B retenue (température = priorité : le Drobo est dans un endroit
+Voie B retenue (la température est la priorité : le Drobo est dans un endroit
 chaud). Reconnaissance de l'outillage :
 
 - `/tmp/nasd/` : que des `*.conf.scratch` + `initialized` + `shares/`. **Pas** de
@@ -447,7 +447,7 @@ en retirant réellement la règle sur le Drobo.
 **Piège macOS vu à l'installation** : la première relance par launchd juste après le
 remplacement du bundle a été refusée une fois (`OS_REASON_CODESIGNING`, Launch
 Constraint Violation) ; les relances suivantes sont passées. Si l'app ne démarre pas
-après une réinstallation : relancer `launchctl kickstart -k gui/501/com.jf.drobo5n-manager`.
+après une réinstallation : relancer `launchctl kickstart -k gui/$(id -u)/com.jf.drobo5n-manager`.
 
 **Découverte : flux d'état sur le port 5000, sans mot de passe.** `nc Drobo5NV2.local 5000`
 renvoie un en-tête `DRINASD` puis le XML `<ESATMUpdate>` complet (celui du Dashboard) :
@@ -491,3 +491,17 @@ source tombe, l'autre suffit ; les deux erreurs s'affichent en entier.
   Réglages → « Envoyer une notification d'essai ».
 - Numérotation : `mSlotNumber` 0 à 4 est affiché « baie 1 à 5 ». La correspondance
   avec l'ordre physique (haut/bas) reste à confirmer en regardant la façade.
+
+---
+
+## MISE À JOUR 11 — préparation pour la publication (12 nov. 2026)
+
+- Adresse vide par défaut dans l'app (le nom Bonjour d'un Drobo est choisi par
+  son propriétaire) ; le panneau demande alors de la renseigner.
+- SSH devenu facultatif : sans mot de passe dans les Réglages, l'app se contente
+  du port 5000 et n'affiche aucune erreur. Rien n'est donc à installer sur le
+  Drobo pour l'usage de base.
+- `mac-app/install.sh` : compile, signe, installe, écrit le LaunchAgent et relance
+  l'app (avec la reprise qu'exige le refus du premier démarrage).
+- README en anglais (`README.md`) et en français (`README.fr.md`), licence MIT.
+

@@ -2,7 +2,7 @@
 # config.toml est ignoré par git (voir .gitignore) — il peut contenir un secret.
 
 [drobo]
-host = "Drobo5NV2.local"    # nom Bonjour du 5N2 (ou son IP, ex. "192.168.2.20")
+host = "MonDrobo.local"     # nom Bonjour de ton Drobo (ou son IP, ex. "192.168.1.20")
 port = 22
 username = "admin"          # compte SSH du Drobo (minuscule !)
 

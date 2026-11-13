@@ -1,60 +1,44 @@
-# Notes de reprise — pour Claude Code
+# Notes pour Claude Code (et pour quiconque reprend le projet)
 
-Contexte : remplacer le Drobo Dashboard (cassé sur Mac récents / macOS 27) pour
-un **Drobo 5N**. Approche : SSH vers l'appareil (Linux embarqué), lecture de
-l'état, puis actions de gestion. Cible = **macOS 27**, outil de bureau. Pas
-d'app iOS pour l'instant.
+Remplaçant du Drobo Dashboard pour un **Drobo 5N2**. Deux outils : l'app de barre
+de menus `mac-app/` (SwiftUI, l'outil principal) et l'outil Python `drobo5n/`.
+Le journal de la rétro-ingénierie est dans `PROGRESS.md` : le lire avant de
+chercher une information sur l'appareil, les impasses y sont notées.
 
-## Où on en est
+## Sources de données
 
-Squelette complet et fonctionnel pour : connexion (`ping`), reconnaissance
-(`recon`), capacité (`status`), dashboard web (`serve`). Ce qui reste à décoder :
-santé + température + modèle/série **par baie**, et la santé globale.
+- **Port 5000** (`mac-app/Sources/DroboMenuBar/DroboFeed.swift`) : XML
+  `<ESATMUpdate>` diffusé sans mot de passe. État général, capacité, détail de
+  chaque baie. C'est la source principale de l'app.
+- **SSH + `sudo esa …`** (`DroboClient.swift`, `drobo5n/ssh.py`) :
+  contre-vérification et volume présenté. `esa` exige root ; l'app essaie
+  `sudo -n`, puis `sudo -S` avec le mot de passe.
+- **Température** : le Drobo ne la publie pas (`<mTemperature>` vaut 0). Ne pas
+  recommencer la recherche sans lire les MISES À JOUR 4, 5 et 9 de `PROGRESS.md`.
 
-## Plan des prochaines étapes (dans l'ordre)
+## Règles
 
-1. **Faire passer la connexion.** Activer SSH sur le 5N (OpenSSH DroboApps ou
-   accès root communautaire), puis `python -m drobo5n ping`.
+- **Lecture seule sur l'appareil.** Ne jamais lancer `esa vxreboot`,
+  `vxshutdown`, `update`, `vxcmd` ni `testDNASClearConfig`.
+- Les secrets ne vont ni dans le dépôt ni dans les journaux : le mot de passe
+  vit dans le Trousseau (app) ou dans `DROBO5N_PASSWORD` (Python).
+  `config.toml` et `recon-*.md` sont ignorés par git.
+- Un commit par cause.
+- Interface et commentaires en français.
 
-2. **Lancer la recon.** `python -m drobo5n recon` → produit `recon-*.md`.
-   Lis ce rapport. On cherche : la commande/le fichier qui expose l'état des
-   disques. Pistes à examiner en priorité dans la sortie :
-   - le point de montage exact du volume protégé (section `stockage` → `df`,
-     `mount`) — corriger `_parse_df_bytes` dans `collect.py` pour cibler ce FS
-     précis plutôt que « le plus gros ».
-   - les binaires trouvés par la « chasse » (`*drobo*`, `nasd`, `mdm`, `esa`,
-     `tdps`, `smart`…) — en tester un en lecture (`--help`, sortie sans args)
-     pour voir s'il crache un statut.
-   - les ports en écoute (section `reseau` → `netstat`) : si un démon expose une
-     API TCP locale, ça peut être une source plus propre que du scraping.
-   - `dmesg` et `/sys/block/sd*/device/` pour modèle/série des disques.
+## Compiler, installer, vérifier
 
-3. **Remplir les parseurs.** Dans `drobo5n/collect.py` :
-   - `parse_bays()` : slot → présent/modèle/série/capacité/santé/température.
-   - `parse_health()` : santé globale (mapper vers l'enum `Health`).
-   Garder chaque sortie brute dans `status.raw[...]` pour tracer d'où vient
-   chaque valeur.
+- `mac-app/install.sh` compile, signe (ad hoc), installe dans `~/Applications` et
+  relance le LaunchAgent. Détails et pièges dans `mac-app/BUILD.md`.
+- Journal de l'app : `/tmp/drobo-menubar.log` (une ligne par changement d'état).
+- Rendu du panneau sans capture d'écran :
+  `DROBO_RENDER_PNG=/dossier DroboMenuBar.app/Contents/MacOS/DroboMenuBar`
+  écrit `panneau-clair.png` et `panneau-sombre.png`. Regarder ces images après
+  toute modification de `PanelViews.swift`.
+- Il n'y a pas de tests automatisés. Vérifier contre un vrai Drobo.
 
-4. **Valider l'affichage.** `status`, `status --json`, puis `serve` (le
-   dashboard lit le même `collect_status`).
+## Pistes
 
-5. **Actions de gestion (phase 2, prudence).** Seulement après une lecture
-   fiable. Commencer par des actions réversibles/inertes. Chaque commande
-   d'écriture : confirmation explicite + log. Ne PAS déclencher de dialogue
-   destructif sans garde-fou.
-
-## Conventions
-
-- Tout ce qui touche l'appareil passe par `DroboSSH` (`ssh.py`). Phase actuelle
-  = lecture seule ; `run_safe()` n'exception jamais.
-- Compat macOS 27 : rester en Python pur, pas d'extension noyau, pas de
-  dépendance à des binaires Apple. Python 3.11+ (tomllib).
-- Secrets/rapports git-ignorés.
-
-## Évolution possible (plus tard)
-
-- Enveloppe **app barre de menus native** (SwiftUI, ou rumps/py2app en Python) :
-  réutiliser tel quel `collect_status()` comme coeur.
-- Rebrancher le **4 baies DAS** via `drobo-utils` (SCSI) tournant dans un Docker
-  sur la machine où il est branché — module séparé, même modèle de données.
-```
+- Interface en anglais (les textes sont en dur, en français).
+- Confirmer les codes de voyant autres que 3 et 128, et l'ordre physique des baies.
+- Historique de la capacité dans le temps.
