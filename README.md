@@ -141,6 +141,20 @@ git-ignored, because they can contain addresses and secrets.
 - Port 5000 is unauthenticated by design of the device. Keep the Drobo on a
   network you trust, and do not expose it to the internet.
 
+## Disclaimer
+
+This is an independent, personal project. It is not affiliated with, endorsed
+by or supported by Drobo or its owners; "Drobo" is a trademark of its
+respective owner.
+
+The software is provided "as is", without warranty of any kind, and you use it
+at your own risk. The author cannot be held liable for data loss, damage to a
+device or any other consequence of using it (see the [license](LICENSE)).
+
+It reads undocumented interfaces of a discontinued product, so what it displays
+may be wrong or incomplete. Do not rely on it as your only warning of a failing
+disk, and keep backups.
+
 ## Credits and references
 
 - [drobo-utils](https://github.com/petersilva/drobo-utils) and its

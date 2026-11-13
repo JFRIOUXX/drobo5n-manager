@@ -142,6 +142,21 @@ ignorés par git, parce qu'ils peuvent contenir des adresses et des secrets.
 - Le port 5000 est sans authentification par conception de l'appareil. Garde le
   Drobo sur un réseau de confiance et ne l'expose pas à Internet.
 
+## Avertissement
+
+Ce projet est personnel et indépendant. Il n'est ni affilié à Drobo ou à ses
+propriétaires, ni approuvé ou soutenu par eux ; « Drobo » est une marque de son
+propriétaire respectif.
+
+Le logiciel est fourni « tel quel », sans garantie d'aucune sorte, et tu
+l'utilises à tes propres risques. L'auteur ne peut être tenu responsable d'une
+perte de données, d'un dommage à un appareil ou de toute autre conséquence de
+son utilisation (voir la [licence](LICENSE)).
+
+Il lit des interfaces non documentées d'un produit qui n'est plus fabriqué : ce
+qu'il affiche peut être faux ou incomplet. Ne compte pas sur lui comme seul
+avertissement d'un disque en panne, et garde des sauvegardes.
+
 ## Remerciements et références
 
 - [drobo-utils](https://github.com/petersilva/drobo-utils) et son
