@@ -1,7 +1,7 @@
 # Projet Drobo 5N2 — Journal de progression
 
 > Récap de tout ce qu'on a découvert, pour reprendre sans repartir de zéro si la
-> conversation est perdue. Dernière mise à jour : 12 novembre 2026 (voir MISE À JOUR 9).
+> conversation est perdue. Dernière mise à jour : 12 novembre 2026 (voir MISES À JOUR 9 et 10).
 
 ## Objectif
 
@@ -457,3 +457,37 @@ mSATA) `mStatus`, `mErrorCount`, `mDiskState`, `mMake`, `mDiskFwRev`, `mSerial`,
 toutes les baies** : pas de °C par cette voie non plus. C'est en revanche la source
 la plus simple pour un état par disque (erreurs, modèle, série) sans SSH ni sudo.
 
+
+---
+
+## MISE À JOUR 10 — état par baie, panneau redessiné, alertes (12 nov. 2026)
+
+**Source** : `DroboFeed.swift` lit un document `<ESATMUpdate>` sur le port 5000
+(Network.framework, délai de 8 s), puis ferme. En-tête de 16 octets : `DRINASD\0`,
+`01 01 00 00`, puis la longueur du XML sur 4 octets gros-boutiste (0x1BF0 = 7152 ici).
+Le Drobo répète le document tant que la connexion reste ouverte.
+
+**Ce que le flux donne** (valeurs du 12 nov.) : `mName`, `mModel` (« Drobo 5N »),
+`mVersion`, `DNASStatus` (6), capacités protégées, seuils `mYellowThreshold` /
+`mRedThreshold` (8500 / 9500 = 85 % / 95 %), et 6 entrées sous `mSlotsExp` :
+5 baies (la première vide, deux ST8000VN004, deux ST12000VN0008) et la baie mSATA
+(256 Go, `mDiskType` 4).
+
+**Voyants** (`mStatus` d'une baie) : 3 = vert et 128 = baie vide sont **observés**.
+0, 1, 2 = éteint, rouge, jaune suivent la table de drobo-utils, **non observés** ici.
+Tout autre code s'affiche « état N » en jaune. `mDiskState` : 16 pour les disques
+du groupe, 32 pour l'accélérateur, 0 pour la baie vide (sens non confirmé, non affiché).
+
+**App** : le flux passe en premier pour l'état général, la capacité et le firmware ;
+SSH + `esa` reste en contre-vérification et pour le volume présenté (`df`). Si une
+source tombe, l'autre suffit ; les deux erreurs s'affichent en entier.
+- Panneau (`PanelViews.swift`) : capacité sur dix voyants, façade noire avec une
+  rangée par baie, accélérateur, pastille d'état. Numéro de série en infobulle.
+- Barre de menus : la pastille est une image non « template » (une forme SwiftUI
+  n'y est pas dessinée, d'où l'ancienne icône sans couleur).
+- Alertes (`Notifier.swift`, `checkAlerts`) : notification quand la liste des
+  constats change, au retour à la normale, ou après 4 lectures ratées de suite.
+  **Non vérifié en conditions réelles** (aucun voyant n'a changé) : essayer avec
+  Réglages → « Envoyer une notification d'essai ».
+- Numérotation : `mSlotNumber` 0 à 4 est affiché « baie 1 à 5 ». La correspondance
+  avec l'ordre physique (haut/bas) reste à confirmer en regardant la façade.

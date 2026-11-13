@@ -82,6 +82,7 @@ swift build -c release
 
 # dist/DroboMenuBar.app/Contents/Info.plist existe déjà et est versionné avec
 # le code — seul le binaire à l'intérieur doit être rafraîchi.
+mkdir -p dist/DroboMenuBar.app/Contents/MacOS   # le binaire n'est pas versionné
 cp .build/release/DroboMenuBar dist/DroboMenuBar.app/Contents/MacOS/DroboMenuBar
 codesign --force --deep --sign - dist/DroboMenuBar.app   # signature ad-hoc (pas de compte développeur)
 
@@ -124,6 +125,11 @@ launchctl kickstart -k gui/501/com.jf.drobo5n-manager   # -k = redémarre le pro
 
 Logs de l'instance lancée par launchd : `/tmp/drobo-menubar.log`.
 
+**Premier lancement après un remplacement du bundle** : macOS refuse une fois le
+démarrage par launchd (`last exit reason = OS_REASON_CODESIGNING`, visible avec
+`launchctl print gui/501/com.jf.drobo5n-manager`). Relancer la même commande
+`kickstart` : le deuxième essai passe (constaté deux fois le 12 nov. 2026).
+
 Pour désactiver le lancement automatique :
 
 ```bash
@@ -143,19 +149,31 @@ mac-app/
 ├── Package.swift              # dépendance Citadel épinglée 0.11.x (macOS 12+ ; la 0.12+ exige macOS 14)
 ├── BUILD.md                   # ce fichier
 ├── dist/
-│   └── DroboMenuBar.app/      # gabarit du bundle .app (Info.plist versionné, binaire rafraîchi à chaque build)
+│   └── DroboMenuBar.app/      # gabarit du bundle .app (Info.plist versionné, binaire régénéré à chaque build)
 └── Sources/DroboMenuBar/
-    ├── DroboCore.swift        # modèle DroboStatus, Health, grille dnasStatus, humanBytes
+    ├── DroboCore.swift        # DroboStatus, Health, grille dnasStatus, tailles à la française
+    ├── DroboFeed.swift        # port 5000 : lecture du flux, XML <ESATMUpdate>, baies et voyants
+    ├── DroboClient.swift      # SSH (Citadel) : esa (sudo -n puis sudo -S) et df
     ├── Keychain.swift         # lecture/écriture du mot de passe dans le Trousseau
-    ├── DroboSettings.swift    # DroboSettings (host/user/password) + DroboViewModel (refresh, timer 30s)
-    ├── DroboClient.swift      # SSH (Citadel) : exécute esa/df, parse, construit DroboStatus
-    └── MenuBarApp.swift       # UI SwiftUI (MenuBarExtra, panneau détaillé, fenêtre Réglages) + @main
+    ├── DroboSettings.swift    # DroboSettings + DroboViewModel (les deux sources, alertes, journal)
+    ├── Notifier.swift         # notifications macOS
+    ├── PanelViews.swift       # le panneau : capacité, façade, boutons, capture en PNG
+    └── MenuBarApp.swift       # icône de la barre de menus, fenêtre Réglages, @main
 ```
 
 Copie installée (celle réellement lancée) : `~/Applications/DroboMenuBar.app`.
 
+## Variables d'environnement pour les essais
+
+| Variable | Effet |
+|---|---|
+| `DROBO_RENDER_PNG=/dossier` | lit le Drobo une fois, écrit `panneau-clair.png` et `panneau-sombre.png` dans le dossier, puis quitte (c'est ainsi que sont faites les images de `docs/`) |
+| `DROBO_NO_KEYCHAIN=1` | ne touche pas au Trousseau (pas de demande d'accès de macOS) ; la lecture SSH est alors sautée |
+| `DROBO_SUDO_MODE=password` | force le chemin `sudo -S` (mot de passe), même si la règle NOPASSWD est présente |
+
 ## Hors périmètre
 
-Température par disque (nécessite une lecture SCSI sur `/dev/sg0`, phase 2 —
-voir `PROGRESS.md`). La santé globale (`dnasStatus`) sert de filet anti-surchauffe
-en attendant.
+Température par disque : le Drobo 5N2 ne la publie pas (`<mTemperature>` vaut 0 sur
+le port 5000 comme dans `nasd.log`). Resterait la lecture SCSI sur `/dev/sg0`
+(`PROGRESS.md`, MISES À JOUR 4-5), sans garantie. L'état général et les voyants
+servent de filet : une protection thermique du Drobo les ferait changer.

@@ -18,6 +18,31 @@ dépende de la version de macOS.
 
 ---
 
+## L'app de barre de menus (macOS)
+
+<p>
+  <img src="docs/panneau-sombre.png" alt="Panneau de DroboMenuBar, thème sombre" width="320">
+  <img src="docs/panneau-clair.png" alt="Panneau de DroboMenuBar, thème clair" width="320">
+</p>
+
+`mac-app/` contient **DroboMenuBar**, une petite app SwiftUI qui vit dans la barre
+de menus : une pastille de couleur et « DR ». Au clic, le panneau reprend l'allure
+du Drobo lui-même :
+
+- la **capacité** sur dix voyants bleus, comme au bas de l'appareil (un voyant = 10 %) ;
+- la **façade** : une rangée par baie, avec le disque, sa taille et son voyant ;
+- l'**accélérateur** mSATA ;
+- une **notification** quand un voyant change, qu'un disque compte des erreurs ou que
+  le Drobo ne répond plus.
+
+L'état par baie vient du **port 5000** du Drobo, qui diffuse sans mot de passe le
+même XML que lisait le Drobo Dashboard. La lecture SSH (`sudo esa …`) sert de
+contre-vérification. Le Drobo ne publie aucune température (le champ existe, il vaut 0).
+
+Compilation et installation : voir [`mac-app/BUILD.md`](mac-app/BUILD.md).
+
+---
+
 ## Prérequis
 
 1. **Python 3.11+** sur ton Mac (nécessaire pour `tomllib`).
