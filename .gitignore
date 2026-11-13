@@ -1,0 +1,18 @@
+config.toml
+recon-*.md
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Binaire et signature du bundle : régénérés à chaque build (voir mac-app/BUILD.md)
+mac-app/dist/DroboMenuBar.app/Contents/MacOS/
+mac-app/dist/DroboMenuBar.app/Contents/_CodeSignature/
+
+# Réglages locaux de Claude Code
+.claude/

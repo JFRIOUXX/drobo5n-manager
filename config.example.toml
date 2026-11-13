@@ -1,0 +1,14 @@
+# Copie ce fichier vers config.toml et remplis le mot de passe.
+# config.toml est ignoré par git (voir .gitignore) — il peut contenir un secret.
+
+[drobo]
+host = "Drobo5NV2.local"    # nom Bonjour du 5N2 (ou son IP, ex. "192.168.2.20")
+port = 22
+username = "admin"          # compte SSH du Drobo (minuscule !)
+
+# Mot de passe du compte admin. Sert à la fois à SSH ET à `sudo esa …`.
+# De préférence via la variable d'environnement plutôt qu'en clair ici :
+#   export DROBO5N_PASSWORD="ton-mot-de-passe"
+# password = "..."
+
+connect_timeout = 10
